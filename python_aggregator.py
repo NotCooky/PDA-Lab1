@@ -16,32 +16,30 @@ params = {
 query_list = {
     "AVG_PRICE_BY_YEAR": """
     SELECT 
-        release_date, 
+        SUBSTR(release_date, -4), 
         AVG(price)
     FROM games
     WHERE SUBSTR(release_date, -4) >= "2023"
-    GROUP BY release_date""",
+    GROUP BY SUBSTR(release_date, -4)""",
 
     "MOST_DISCOUNT": """
     SELECT 
-        title,
-        discount, 
-        price
+        AVG(discount),
+        MAX(discount), 
+        AVG(price), 
+        COUNT(*)
     FROM games
     WHERE discount > 0
-    ORDER BY discount DESC
-    LIMIT 10""",
+    GROUP BY discount""",
 
-    "GAMES_FOR_LESS_THAN_DOLLAR": """SELECT title, price
+    "GAMES_FOR_LESS_THAN_DOLLAR": """SELECT AVG(price), COUNT(*)
     FROM games
     Where price < 10
     ORDER BY price DESC""",
 
     "GAMES_WITH_RATING_HIGH": """
-        SELECT 
-            title, 
-            rating,
-            release_date
+        SELECT  
+            AVG(rating)
         FROM games
         WHERE rating IS NOT NULL 
           AND rating >= :high_rating
@@ -50,9 +48,7 @@ query_list = {
 
     "GAMES_WITH_RATING_LOW": """
         SELECT 
-            title, 
-            rating,
-            release_date
+            AVG(rating)
         FROM games
         WHERE rating IS NOT NULL 
           AND rating <= :low_rating
@@ -72,5 +68,6 @@ if __name__ == "__main__":
     for name, sql in query_list.items():
         df = run_query(sql, engine)
         results[name] = df
+        print(f"{name}")
         print(df)
 
