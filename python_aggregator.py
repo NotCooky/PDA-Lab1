@@ -24,13 +24,13 @@ query_list = {
 
     "MOST_DISCOUNT": """
     SELECT 
-        AVG(discount),
-        MAX(discount), 
+        discount, 
         AVG(price), 
         COUNT(*)
     FROM games
     WHERE discount > 0
-    GROUP BY discount""",
+    GROUP BY discount
+    ORDER BY discount DESC""",
 
     "GAMES_FOR_LESS_THAN_DOLLAR": """SELECT AVG(price), COUNT(*)
     FROM games
@@ -39,7 +39,8 @@ query_list = {
 
     "GAMES_WITH_RATING_HIGH": """
         SELECT  
-            AVG(rating)
+            AVG(rating),
+            COUNT(*)
         FROM games
         WHERE rating IS NOT NULL 
           AND rating >= :high_rating
@@ -48,7 +49,8 @@ query_list = {
 
     "GAMES_WITH_RATING_LOW": """
         SELECT 
-            AVG(rating)
+            AVG(rating),
+            COUNT(*)
         FROM games
         WHERE rating IS NOT NULL 
           AND rating <= :low_rating
