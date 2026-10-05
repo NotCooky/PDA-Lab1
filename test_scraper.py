@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 
 
 def clean_price(price_raw: str | None) -> float:
-    """Очищает строку цены и переводит её во float."""
+    """Очищает строку цены и переводит её во float. Если игра по скидке, то цена учитывается со скидкой."""
     if not price_raw:
         return 0.0
 
@@ -39,10 +39,37 @@ def clean_rating(tooltip_html: str | None) -> int | None:
     match = re.search(r"(\d+)%", tooltip_html)
     return int(match.group(1)) if match else None
 
+def clean_date(date_raw: str | None) -> str | None:
+    if not date_raw:
+        return None
 
-def scrape_steam_catalog(
-    total_games: int = 300, delay_seconds: float = 1.0
-) -> list[dict]:
+    months = {
+        "Jan" : "01",
+        "Feb" : "02",
+        "Mar" : "03",
+        "Apr" : "04",
+        "May" : "05",
+        "Jun" : "06",
+        "Jul" : "07",
+        "Aug" : "08",
+        "Sep" : "09",
+        "Oct" : "10",
+        "Nov" : "11",
+        "Dec" : "12"
+    }
+
+    parts = date_raw.strip().replace(",", "").split() #.replace() если вдруг там нет запятой после месяца
+    if len(parts) != 3:
+        return None
+
+    day, month_name, year = parts
+    month = months.get(month_name)
+
+    return f"{day.zfill(2)}.{month}.{year}"
+
+
+
+def scrape_steam_catalog(total_games: int = 300, delay_seconds: float = 1.0) -> list[dict]:
     """Собирает игры из каталога Steam с постраничной пагинацией."""
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
@@ -79,7 +106,7 @@ def scrape_steam_catalog(
             title = title_el.text.strip() if title_el else "Unknown"
 
             date_el = row.find("div", class_="search_released")
-            release_date = date_el.text.strip() if date_el else None
+            release_date = clean_date(date_el.text.strip()) if date_el else None
 
             disc_el = row.find("div", class_="discount_pct")
             discount = clean_discount(disc_el.text.strip()) if disc_el else 0
@@ -92,7 +119,6 @@ def scrape_steam_catalog(
             if review_el and "data-tooltip-html" in review_el.attrs:
                 positive_rate = clean_rating(review_el["data-tooltip-html"])
 
-            # Извлечение поддерживаемых платформ
             platforms = []
             if row.find("span", class_="win"):
                 platforms.append("Windows")
@@ -100,10 +126,8 @@ def scrape_steam_catalog(
                 platforms.append("macOS")
             if row.find("span", class_="linux"):
                 platforms.append("Linux")
-
-                # если иконки не найдены (например веб версия) то ставим по умолчанию винду
             if not platforms:
-                platforms.append("Windows")
+                platforms.append("Unknown")
 
             games.append(
                 {
@@ -123,8 +147,7 @@ def scrape_steam_catalog(
 
 
 if __name__ == "__main__":
-    # Собираем 200 записей (достаточно для репрезентативности лабы)
-    data = scrape_steam_catalog(total_games=200, delay_seconds=1.0)
+    data = scrape_steam_catalog(total_games=10, delay_seconds=1.0)
 
     with open("raw_games.json", "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
