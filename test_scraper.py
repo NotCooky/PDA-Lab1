@@ -64,12 +64,15 @@ def clean_date(date_raw: str | None) -> str | None:
 
     day, month_name, year = parts
     month = months.get(month_name)
+    
+    if month is None:
+        return None
 
     return f"{day.zfill(2)}.{month}.{year}"
 
 
 
-def scrape_steam_catalog(total_games: int = 300, delay_seconds: float = 1.0) -> list[dict]:
+def scrape_steam_catalog(total_games: int, delay_seconds: float = 1.0) -> list[dict]:
     """Собирает игры из каталога Steam с постраничной пагинацией."""
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
@@ -147,7 +150,7 @@ def scrape_steam_catalog(total_games: int = 300, delay_seconds: float = 1.0) -> 
 
 
 if __name__ == "__main__":
-    data = scrape_steam_catalog(total_games=10, delay_seconds=1.0)
+    data = scrape_steam_catalog(total_games=3000, delay_seconds=1.0)
 
     with open("raw_games.json", "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
