@@ -16,45 +16,54 @@ params = {
 query_list = {
     "AVG_PRICE_BY_YEAR": """
     SELECT 
-        SUBSTR(release_date, -4), 
-        AVG(price)
+        SUBSTR(release_date, -4) AS year, 
+        AVG(price),
+        COUNT(*)
     FROM games
     WHERE SUBSTR(release_date, -4) >= "2023"
     GROUP BY SUBSTR(release_date, -4)""",
 
-    "MOST_DISCOUNT": """
+    "AVG_PRICE_ON_RATING": """
     SELECT 
-        discount, 
+        (rating / 10) * 10 AS rating_step, 
         AVG(price), 
         COUNT(*)
     FROM games
-    WHERE discount > 0
-    GROUP BY discount
-    ORDER BY discount DESC""",
+    GROUP BY FLOOR(rating / 10) * 10
+    ORDER BY rating_step DESC""",
 
-    "GAMES_FOR_LESS_THAN_DOLLAR": """SELECT AVG(price), COUNT(*)
+    "GAMES_ON_PLATFORMS_AVG_PRICE": """
+    SELECT platforms, AVG(price) as average_price, COUNT(*) AS games_count 
     FROM games
-    Where price < 10
-    ORDER BY price DESC""",
+    WHERE platforms IS NOT NULL
+    GROUP BY platforms
+    ORDER BY games_count DESC;""",
 
-    "GAMES_WITH_RATING_HIGH": """
+    "PRICE_GROUPS": """
         SELECT  
+            (price / 10) * 10 AS price_step,
             AVG(rating),
             COUNT(*)
         FROM games
         WHERE rating IS NOT NULL 
-          AND rating >= :high_rating
-        ORDER BY rating DESC, title ASC;
+        GROUP BY FLOOR(price / 10) * 10
+        ORDER BY price_step DESC;
     """,
 
-    "GAMES_WITH_RATING_LOW": """
+    "GAMES_BY_RATING": """
         SELECT 
-            AVG(rating),
-            COUNT(*)
+            CASE
+                WHEN rating < 60 THEN "<60"
+                WHEN rating BETWEEN 60 AND 79 THEN "60-79"
+                WHEN rating BETWEEN 80 AND 89 THEN "80-89"
+                ELSE "90+"
+            END AS rating_range,
+            AVG(price * (1 - COALESCE(discount, 0) / 100)) AS average_price_with_discount,
+            COUNT(*)   
         FROM games
-        WHERE rating IS NOT NULL 
-          AND rating <= :low_rating
-        ORDER BY rating ASC, title ASC;
+        WHERE rating IS NOT NULL AND discount > 0
+        GROUP BY rating_range
+        ORDER BY rating_range DESC;
     """
 }
 
