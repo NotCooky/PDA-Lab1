@@ -138,8 +138,8 @@ def scrape_steam_catalog(total_games: int, delay_seconds: float = 1.0) -> list[d
                     "title": title,
                     "release_date": release_date,
                     "price": price,
-                    "discount_percent": discount,
-                    "positive_rate": positive_rate,
+                    "discount": discount,
+                    "rating": positive_rate,
                     "platforms": ", ".join(platforms),
                 }
             )
