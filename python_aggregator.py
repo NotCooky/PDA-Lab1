@@ -1,88 +1,97 @@
-import pandas as pd
-from sqlalchemy import create_engine, text
+from db import SessionLocal, Game
+from tabulate import tabulate
+from sqlalchemy import select, func, case
 
-engine = create_engine("sqlite:///steam.db")
+year = func.substr(Game.release_date, -4)
 
-query_list = {
-    "AVG_PRICE_BY_YEAR": """
-        SELECT
-            SUBSTR(release_date, -4) AS release_year,
-            ROUND(AVG(price), 2) AS average_price_eur,
-            COUNT(*) AS games_count
-        FROM games
-        WHERE release_date IS NOT NULL
-        GROUP BY SUBSTR(release_date, -4)
-        ORDER BY release_year
-    """,
+month = func.substr(Game.release_date, 4, 2)
 
-    "GAMES_BY_PLATFORM_COMBINATION": """
-        SELECT
-            platforms,
-            COUNT(*) AS games_count,
-            ROUND(AVG(price), 2) AS average_price_eur
-        FROM games
-        WHERE platforms IS NOT NULL
-        GROUP BY platforms
-        ORDER BY games_count DESC
-    """,
+season = case(
+    (month.in_(["12", "01", "02"]), "Зима"),
+    (month.in_(["03", "04", "05"]), "Весна"),
+    (month.in_(["06", "07", "08"]), "Лето"),
+    (month.in_(["09", "10", "11"]), "Осень"),
+).label("season")
 
-    "GAMES_BY_DISCOUNT_RANGE": """
-        SELECT
-            CASE
-                WHEN COALESCE(discount, 0) = 0 THEN '0%: без скидки'
-                WHEN discount BETWEEN 1 AND 25 THEN '1-25%'
-                WHEN discount BETWEEN 26 AND 50 THEN '26-50%'
-                WHEN discount BETWEEN 51 AND 75 THEN '51-75%'
-                ELSE '76-100%'
-            END AS discount_range,
-            COUNT(*) AS games_count,
-            ROUND(AVG(price), 2) AS average_price_after_discount_eur
-        FROM games
-        GROUP BY discount_range
-        ORDER BY MIN(COALESCE(discount, 0))
-    """,
+price_range = case(
+    (Game.price == 0, "Бесплатно"),
+    (Game.price < 5, "Меньше 5 €"),
+    (Game.price < 15, "5-14.99 €"),
+    (Game.price < 30, "15-29.99 €"),
+    else_="30 € и выше",
+).label("price_range")
 
-    "GAMES_BY_RATING_RANGE": """
-        SELECT
-            CASE
-                WHEN rating < 60 THEN 'до 60'
-                WHEN rating < 80 THEN '60-79'
-                WHEN rating < 90 THEN '80-89'
-                ELSE '90 и выше'
-            END AS rating_range,
-            COUNT(*) AS games_count,
-            ROUND(AVG(price), 2) AS average_price_eur
-        FROM games
-        WHERE rating IS NOT NULL
-        GROUP BY rating_range
-        ORDER BY MIN(rating)
-    """,
+rating_range = case(
+    (Game.rating < 60, "До 60"),
+    (Game.rating < 80, "60-79"),
+    (Game.rating < 90, "80-89"),
+    else_="90 и выше",
+).label("rating_range")
 
-    "GAMES_BY_PRICE_RANGE": """
-        SELECT
-            CASE
-                WHEN price = 0 THEN 'Бесплатно'
-                WHEN price < 5 THEN 'Меньше 5 €'
-                WHEN price < 15 THEN '5-14.99 €'
-                WHEN price < 30 THEN '15-29.99 €'
-                ELSE '30 € и выше'
-            END AS price_range,
-            COUNT(*) AS games_count,
-            ROUND(AVG(rating), 1) AS average_rating
-        FROM games
-        WHERE price IS NOT NULL
-        GROUP BY price_range
-        ORDER BY MIN(price)
-    """
+sort_by_platforms = (
+    select(Game.platforms,
+           func.count(Game.app_id).label("games_count"),
+           func.avg(Game.price).label("average_price"),
+           )
+           .group_by(Game.platforms)
+           .order_by(func.count(Game.app_id).desc())
+)
+
+average_price_by_year = (
+    select(year.label("release_year"),
+           func.count(Game.app_id).label("games_count"),
+           func.avg(Game.price).label("average_price")
+           )
+           .where(Game.release_date.is_not(None), Game.release_date != "")
+           .group_by(year)
+           .order_by(year)
+)
+
+average_discount_by_season = (
+    select(
+        season,
+        func.round(func.avg(Game.discount), 1).label("average_discount"),
+        func.count(Game.app_id).label("games_count"),
+    )
+    .where(Game.release_date.is_not(None))
+    .group_by(season)
+    .order_by(season)
+)
+
+games_by_price_range = (
+    select(
+        price_range,
+        func.count(Game.app_id).label("games_count"),
+        func.round(func.avg(Game.rating), 1).label("average_rating"),
+    )
+    .where(Game.price.is_not(None))
+    .group_by(price_range)
+    .order_by(func.min(Game.price))
+)
+
+games_by_rating_range = (
+    select(
+        rating_range,
+        func.count(Game.app_id).label("games_count"),
+        func.round(func.avg(Game.price), 2).label("average_price"),
+    )
+    .where(Game.rating.is_not(None))
+    .group_by(rating_range)
+    .order_by(func.min(Game.rating))
+)
+
+
+queries = {
+    "Игры по платформам": sort_by_platforms,
+    "Средняя цена по году": average_price_by_year,
+    "Скидки по сезонам": average_discount_by_season,
+    "Игры по диапазонам цены": games_by_price_range,
+    "Игры по диапазонам рейтинга": games_by_rating_range,
 }
 
+with SessionLocal() as session:
+    for title, statement in queries.items():
+        rows = session.execute(statement).mappings().all()
 
-def run_query(query: str) -> pd.DataFrame:
-    with engine.connect() as connection:
-        return pd.read_sql_query(text(query), connection)
-
-
-if __name__ == "__main__":
-    for name, sql in query_list.items():
-        print(f"\n{name}")
-        print(run_query(sql).to_string(index=False))
+        print(f"\n{title}")
+        print(tabulate(rows, headers="keys", tablefmt="grid"))
