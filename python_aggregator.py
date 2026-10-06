@@ -22,6 +22,10 @@ price_range = case(
     else_="30 € и выше",
 ).label("price_range")
 
+discount_more_than_zero = case(
+    (Game.discount > 0, "Есть скидка")
+).label("discount_more_than_zero")
+
 rating_range = case(
     (Game.rating < 60, "До 60"),
     (Game.rating < 80, "60-79"),
@@ -48,15 +52,15 @@ average_price_by_year = (
            .order_by(year)
 )
 
-average_discount_by_season = (
+discount_for_games_by_year = (
     select(
-        season,
-        func.round(func.avg(Game.discount), 1).label("average_discount"),
+        year.label("release_year"),
         func.count(Game.app_id).label("games_count"),
+        func.avg(Game.discount).label("average_discount"),
     )
-    .where(Game.release_date.is_not(None))
-    .group_by(season)
-    .order_by(season)
+    .where(Game.discount.is_not(0))
+    .group_by(year)
+    .order_by(year)
 )
 
 games_by_price_range = (
@@ -85,9 +89,9 @@ games_by_rating_range = (
 queries = {
     "Игры по платформам": sort_by_platforms,
     "Средняя цена по году": average_price_by_year,
-    "Скидки по сезонам": average_discount_by_season,
     "Игры по диапазонам цены": games_by_price_range,
     "Игры по диапазонам рейтинга": games_by_rating_range,
+    "Скидки на игры по годам выхода": discount_for_games_by_year
 }
 
 with engine.connect() as connection:
