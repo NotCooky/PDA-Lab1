@@ -1,6 +1,7 @@
-from db import SessionLocal, Game
-from tabulate import tabulate
+import pandas as pd
 from sqlalchemy import select, func, case
+
+from db import engine, Game
 
 year = func.substr(Game.release_date, -4)
 
@@ -89,9 +90,9 @@ queries = {
     "Игры по диапазонам рейтинга": games_by_rating_range,
 }
 
-with SessionLocal() as session:
+with engine.connect() as connection:
     for title, statement in queries.items():
-        rows = session.execute(statement).mappings().all()
+        result = pd.read_sql_query(statement, connection)
 
         print(f"\n{title}")
-        print(tabulate(rows, headers="keys", tablefmt="grid"))
+        print(result.to_string(index=False))
