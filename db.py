@@ -1,7 +1,7 @@
-from datetime import datetime
 from sqlalchemy import (
     create_engine, Column, Integer, String, Float)
 from sqlalchemy.orm import declarative_base, sessionmaker
+from contextlib import contextmanager
 
 engine = create_engine("sqlite:///steam.db", future=True)
 SessionLocal = sessionmaker(bind=engine, future=True)
@@ -30,6 +30,20 @@ class Game(Base):
 
 def init_db():
     Base.metadata.create_all(engine)
+
+@contextmanager
+def get_session():
+    session = SessionLocal()
+    try:
+        yield session
+        session.commit()
+
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
 
 
 if __name__ == "__main__":

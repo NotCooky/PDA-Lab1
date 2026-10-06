@@ -1,8 +1,25 @@
 import json
-import pandas as pd
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-from db import engine, init_db, Game
+from db import get_session, init_db, Game
 
+
+def _normalize_record(raw):
+    app_id = raw.get("app_id")
+    title = raw.get("title")
+    if app_id is None or not title:
+        return None
+    platforms = raw.get("platforms")
+    if isinstance(platforms, list):
+        platforms = json.dumps(platforms, ensure_ascii=False) 
+    return {
+        "app_id": int(app_id),
+        "title": str(title),
+        "release_date": raw.get("release_date"),
+        "price": raw.get("price"),
+        "discount": raw.get("discount") or 0,
+        "rating": raw.get("rating"),
+        "platforms": platforms,
+
+    }
 
 def load_steam_json(path):
     init_db()
@@ -10,29 +27,21 @@ def load_steam_json(path):
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    df = pd.DataFrame(data).rename(columns={
-        "discount_percent": "discount",
-        "positive_rate": "rating",
-    })
+    games_by_id = {}
+    for raw in data:
+        rec = _normalize_record(raw)
+        if rec is not None:
+            games_by_id[rec["app_id"]] = rec
 
-    df["platforms"] = df["platforms"].apply(
-        lambda x: json.dumps(x, ensure_ascii=False) if isinstance(x, list) else x
-    )
-    df["discount"] = pd.to_numeric(df["discount"], errors="coerce").fillna(0).astype(int)
-    
-    df["app_id"] = pd.to_numeric(df["app_id"], errors="coerce").astype("Int64")
-    df = df.dropna(subset=["app_id"])
-    df["app_id"] = df["app_id"].astype(int)
-    df = df.drop_duplicates(subset="app_id", keep="last")
+    with get_session() as session:
+        for rec in games_by_id.values():
+            session.merge(Game(**rec))
 
-    
-    with engine.begin() as conn:
-        query = sqlite_insert(Game.__table__).values(df.to_dict(orient="records"))
-        update_cols = {c: query.excluded[c] for c in df.columns if c != "app_id"}
-        query = query.on_conflict_do_update(index_elements=["app_id"], set_=update_cols)
-        conn.execute(query)
+    return(len(games_by_id))
 
-    return len(df)
+
+
+
 
 
 if __name__ == "__main__":
